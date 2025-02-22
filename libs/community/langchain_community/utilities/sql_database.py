@@ -315,12 +315,21 @@ class SQLDatabase:
         appended to each table description. This can increase performance as
         demonstrated in the paper.
         """
+        
         all_table_names = self.get_usable_table_names()
+
         if table_names is not None:
+            all_full_names = set(table_names)
+            # create a list of tables without the schema prefix
+            for i,table_name in enumerate(table_names):
+                x = table_name.split(".")
+                if len(x) == 2:
+                    table_names[i] = x[1]
+
             missing_tables = set(table_names).difference(all_table_names)
             if missing_tables:
                 raise ValueError(f"table_names {missing_tables} not found in database")
-            all_table_names = table_names
+            all_table_names = set(table_names)
 
         metadata_table_names = [tbl.name for tbl in self._metadata.sorted_tables]
         to_reflect = set(all_table_names) - set(metadata_table_names)
@@ -331,11 +340,14 @@ class SQLDatabase:
                 only=list(to_reflect),
                 schema=self._schema,
             )
-
+        tables_counter = {}
+        for tbl in self._metadata.sorted_tables:
+            tables_counter[tbl.name] = tables_counter.get(tbl.name, 0) + 1
         meta_tables = [
             tbl
             for tbl in self._metadata.sorted_tables
-            if tbl.name in set(all_table_names)
+            if (tbl.name in set(all_table_names) and tables_counter[tbl.name] == 1) \
+                or (tbl.fullname in set(all_full_names) and tables_counter[tbl.name] > 1)
             and not (self.dialect == "sqlite" and tbl.name.startswith("sqlite_"))
         ]
 
